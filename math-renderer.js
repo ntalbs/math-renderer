@@ -23,6 +23,7 @@ const mjPage = mathjax.document('', { InputJax: tex, OutputJax: svg });
 const blogRoot = '/Users/ntalbs/Blog';
 const publicDir = path.join(blogRoot, 'public');
 const cacheFile = path.join(blogRoot, 'mathjax3', 'math-cache.json');
+const silent = true; // print only RENDER message
 
 const files = glob.sync(`${publicDir}/**/*`);
 
@@ -49,7 +50,9 @@ function process(sourcePath) {
     }
 
     if (isSrcNotChanged(sourcePath)) {
-      console.log(pc.bold(pc.green('SKIP:')), targetPath);
+      if (!silent) {
+        console.log(pc.bold(pc.green('SKIP:')), targetPath);
+      }
       return;
     }
 
@@ -57,7 +60,9 @@ function process(sourcePath) {
     if (sourcePath.endsWith('.html')) {
       processHtml(sourcePath, targetPath);
     } else {
-      console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+      if (!silent) {
+        console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+      }
       fs.copyFileSync(sourcePath, targetPath);
     }
   }
@@ -96,7 +101,9 @@ function processHtml(sourcePath, targetPath) {
     console.log(pc.bold(pc.red('RENDER:')), sourcePath);
   } else {
     fs.copyFileSync(sourcePath, targetPath);
-    console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+    if (!silent) {
+      console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+    }
   }
 
   function processNode(node) {
