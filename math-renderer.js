@@ -21,8 +21,9 @@ const svg = new SVG({ fontCache: 'local' });
 const mjPage = mathjax.document('', { InputJax: tex, OutputJax: svg });
 
 const blogRoot = '/Users/ntalbs/Blog';
-const publicDir = path.join(blogRoot, 'public');
-const cacheFile = path.join(blogRoot, 'mathjax3', 'math-cache.json');
+const publicDir = 'public';
+const targetDir = 'rendered-public';
+const cacheFile = path.join(blogRoot, targetDir, 'math-cache.json');
 const silent = true; // print only RENDER message
 const stat = {
   directories: 0,
@@ -31,7 +32,7 @@ const stat = {
   skipped: 0
 };
 
-const files = glob.sync(`${publicDir}/**/*`);
+const files = glob.sync(`${blogRoot}/${publicDir}/**/*`);
 
 console.log(pc.yellow(`> Found ${files.length} files to process. Start processing ...`));
 
@@ -172,7 +173,7 @@ function processHtml(sourcePath, targetPath) {
 }
 
 function getTargetPathFrom(sourcePath) {
-  return sourcePath.replace('public', 'mathjax3');
+  return sourcePath.replace(publicDir, targetDir);
 }
 
 function ensureDir(dir) {
