@@ -65,7 +65,7 @@ export function render(src, target, options) {
       ensureDir(targetPath);
       stat.directories++;
     } else {
-      if (isSrcNotChanged(sourcePath)) {
+      if (isSrcNotChanged(sourcePath) && !options.force) {
         stat.skipped ++;
         if (!options.quite) {
           log('skip');
