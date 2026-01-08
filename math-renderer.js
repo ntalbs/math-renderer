@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const glob = require('glob');
-const pc = require('picocolors');
-const { JSDOM } = require('jsdom');
-const { mathjax } = require('mathjax-full/js/mathjax.js');
-const { TeX } = require('mathjax-full/js/input/tex.js');
-const { SVG } = require('mathjax-full/js/output/svg.js');
-const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
-const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
-const { AllPackages } = require('mathjax-full/js/input/tex/AllPackages.js');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { glob } from 'glob';
+import chalk from 'chalk';
+import { JSDOM } from 'jsdom';
+
+// MathJax imports
+import { mathjax } from 'mathjax-full/js/mathjax.js';
+import { TeX } from 'mathjax-full/js/input/tex.js';
+import { SVG } from 'mathjax-full/js/output/svg.js';
+import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js';
+import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js';
+import { AllPackages } from 'mathjax-full/js/input/tex/AllPackages.js';
 
 // --- MathJax Initialization ---
 const adaptor = liteAdaptor();
@@ -34,7 +36,7 @@ const stat = {
 
 const files = glob.sync(`${blogRoot}/${publicDir}/**/*`);
 
-console.log(pc.yellow(`> Found ${files.length} files to process. Start processing ...`));
+console.log(chalk.yellow.bold('> Start processing:'), `Found ${files.length} files ...`);
 
 let cache = {};
 if (fs.existsSync(cacheFile)) {
@@ -46,7 +48,8 @@ files.forEach(f => process(f));
 fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
 
 stat.total = stat.directories + stat.rendered + stat.copied + stat.skipped;
-console.log(pc.bold(pc.yellow('> Completed.')), stat);
+
+console.log(chalk.green.bold('> Completed.'), stat);
 
 
 
@@ -65,7 +68,7 @@ function process(sourcePath) {
     if (isSrcNotChanged(sourcePath)) {
       stat.skipped ++;
       if (!silent) {
-        console.log(pc.bold(pc.green('SKIP:')), targetPath);
+        console.log(chalk.green.bold('SKIP:'), targetPath);
       }
       return;
     }
@@ -76,7 +79,7 @@ function process(sourcePath) {
     } else {
       stat.copied++;
       if (!silent) {
-        console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+        console.log(chalk.yellow.bold('COPY:'), sourcePath);
       }
       fs.copyFileSync(sourcePath, targetPath);
     }
@@ -114,12 +117,12 @@ function processHtml(sourcePath, targetPath) {
     document.head.appendChild(styleTag);
     fs.writeFileSync(targetPath, dom.serialize());
     stat.rendered++;
-    console.log(pc.bold(pc.red('RENDER:')), sourcePath);
+    console.log(chalk.red.bold('RENDER:'), sourcePath);
   } else {
     fs.copyFileSync(sourcePath, targetPath);
     stat.copied++;
     if (!silent) {
-      console.log(pc.bold(pc.yellow('COPY:')), sourcePath);
+      console.log(chalk.yellow.bold('COPY:'), sourcePath);
     }
   }
 
