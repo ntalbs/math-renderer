@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -15,172 +13,195 @@ import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js';
 import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js';
 import { AllPackages } from 'mathjax-full/js/input/tex/AllPackages.js';
 
-// --- MathJax Initialization ---
-const adaptor = liteAdaptor();
-RegisterHTMLHandler(adaptor);
-const tex = new TeX({ packages: AllPackages });
-const svg = new SVG({ fontCache: 'local' });
-const mjPage = mathjax.document('', { InputJax: tex, OutputJax: svg });
+export function render(src, target, options) {
+  // --- MathJax Initialization ---
+  const adaptor = liteAdaptor();
+  RegisterHTMLHandler(adaptor);
+  const tex = new TeX({ packages: AllPackages });
+  const svg = new SVG({ fontCache: 'local' });
+  const mjPage = mathjax.document('', { InputJax: tex, OutputJax: svg });
 
-const blogRoot = '/Users/ntalbs/Blog';
-const publicDir = 'public';
-const targetDir = 'rendered-public';
-const cacheFile = path.join(blogRoot, targetDir, 'math-cache.json');
-const silent = true; // print only RENDER message
-const stat = {
-  directories: 0,
-  rendered: 0,
-  copied: 0,
-  skipped: 0
-};
+  const cacheFile = path.join(target, 'math-cache.json');
+  let cache = readCacheFile(cacheFile);
 
-const files = glob.sync(`${blogRoot}/${publicDir}/**/*`);
-
-console.log(chalk.yellow.bold('> Start processing:'), `Found ${files.length} files ...`);
-
-let cache = {};
-if (fs.existsSync(cacheFile)) {
-  cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-}
-
-files.forEach(f => process(f));
-
-fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
-
-stat.total = stat.directories + stat.rendered + stat.copied + stat.skipped;
-
-console.log(chalk.green.bold('> Completed.'), stat);
+  const stat = {
+    directories: 0,
+    rendered: 0,
+    copied: 0,
+    skipped: 0,
+    total: 0
+  };
 
 
+  const files = glob.sync(`${src}/**/*`);
 
-function process(sourcePath) {
-  let targetPath = getTargetPathFrom(sourcePath);
+  console.log(chalk.yellow.bold('> Start processing:'), `Found ${files.length} files ...`);
+  files.forEach(f => process(f));
+  console.log(chalk.green.bold('> Completed.'), stat);
 
-  let sourcePathStat = fs.statSync(sourcePath);
-  if (sourcePathStat.isDirectory()) {
-    ensureDir(targetPath);
-    stat.directories++;
-  } else {
-    if (sourcePath.endsWith('.md5')) {
-      return;
-    }
+  writeCacheFile(cacheFile);
 
-    if (isSrcNotChanged(sourcePath)) {
-      stat.skipped ++;
-      if (!silent) {
-        console.log(chalk.green.bold('SKIP:'), targetPath);
-      }
-      return;
-    }
 
-    ensureDir(path.dirname(targetPath));
-    if (sourcePath.endsWith('.html')) {
-      processHtml(sourcePath, targetPath);
+  // -- internal functions --
+
+  function readCacheFile(cacheFile) {
+    if (fs.existsSync(cacheFile)) {
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
     } else {
-      stat.copied++;
-      if (!silent) {
-        console.log(chalk.yellow.bold('COPY:'), sourcePath);
+      return {}
+    }
+  }
+
+  function writeCacheFile(cacheFile) {
+      fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+  }
+
+  function process(sourcePath) {
+    let targetPath = getTargetPathFrom(sourcePath);
+
+    let sourcePathStat = fs.statSync(sourcePath);
+    stat.total++;
+    if (sourcePathStat.isDirectory()) {
+      ensureDir(targetPath);
+      stat.directories++;
+    } else {
+      if (isSrcNotChanged(sourcePath)) {
+        stat.skipped ++;
+        if (!options.quite) {
+          log('skip');
+        }
+        return;
       }
+
+      ensureDir(path.dirname(targetPath));
+      if (sourcePath.endsWith('.html')) {
+        if (processHtml(sourcePath, targetPath)) {
+          log('render');
+        } else {
+          log('copy');
+        }
+      } else {
+        stat.copied++;
+        if (!options.quite) {
+          log('copy');
+        }
+        fs.copyFileSync(sourcePath, targetPath);
+      }
+    }
+
+    function log(action) {
+      if (options.quieter) return;
+
+      switch (action) {
+      case 'render':
+        console.log(chalk.red.bold('RENDER:'), sourcePath);
+        break;
+      case 'copy':
+        if (options.quiet) return;
+        console.log(chalk.yellow.bold('COPY:'), sourcePath);
+        break;
+      default:
+        if (options.quiet) return;
+        console.log(chalk.green.bold('SKIP:'), sourcePath);
+        break;
+      }
+    }
+  }
+
+  function isSrcNotChanged(src) {
+    let newMd5 = md5(src);
+    let same = cache[src] === newMd5;
+    if (!same) {
+      cache[src] = newMd5;
+    }
+    return same;
+  }
+
+  function md5(src) {
+    let content = fs.readFileSync(src)
+    return crypto.createHash('md5').update(content).digest('hex');
+  }
+
+  function processHtml(sourcePath, targetPath) {
+    const html = fs.readFileSync(sourcePath, 'utf8');
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+    const body = document.body;
+    let needsUpdate = false;
+
+    processNode(body);
+
+    if (needsUpdate) {
+      // Add the required MathJax CSS to the <head>
+      const styleTag = document.createElement('style');
+      styleTag.setAttribute('id', 'MJX-SVG-styles');
+      styleTag.innerHTML = adaptor.innerHTML(svg.styleSheet(mjPage));
+      document.head.appendChild(styleTag);
+      fs.writeFileSync(targetPath, dom.serialize());
+      stat.rendered++;
+      return true; // rendered
+    } else {
       fs.copyFileSync(sourcePath, targetPath);
+      stat.copied++;
+      return false; // no math, copied
     }
-  }
-}
 
-function isSrcNotChanged(src) {
-  let newMd5 = md5(src);
-  let same = cache[src] === newMd5;
-  if (!same) {
-    cache[src] = newMd5;
-  }
-  return same;
-}
+    function processNode(node) {
+      // Regex for $$...$$ and $...$
+      const displayRegex = /\$\$(.*?)\$\$/gs;
+      const inlineRegex = /(?<!\\)\$([^\$]+?)\$/g;
 
-function md5(src) {
-  let content = fs.readFileSync(src)
-  return crypto.createHash('md5').update(content).digest('hex');
-}
+      if (node.nodeType === 3) { // Text node
+        let text = node.textContent;
+        if (displayRegex.test(text) || inlineRegex.test(text)) {
+          needsUpdate = true;
 
-function processHtml(sourcePath, targetPath) {
-  const html = fs.readFileSync(sourcePath, 'utf8');
-  const dom = new JSDOM(html);
-  const document = dom.window.document;
-  const body = document.body;
-  let needsUpdate = false;
+          // Render Display Math
+          text = text.replace(displayRegex, (_, texStr) => {
+            const output = mjPage.convert(texStr, { display: true });
+            const svg = adaptor.innerHTML(output);
+            return `<mjx-container display="true" style="display: block; text-align: center; margin: 1em 0;">${svg}</mjx-container>`;
+          });
 
-  processNode(body);
+          // Render Inline Math
+          text = text.replace(inlineRegex, (_, texStr) => {
+            const output = mjPage.convert(texStr, { display: false });
+            return adaptor.innerHTML(output);
+          });
 
-  if (needsUpdate) {
-    // Add the required MathJax CSS to the <head>
-    const styleTag = document.createElement('style');
-    styleTag.setAttribute('id', 'MJX-SVG-styles');
-    styleTag.innerHTML = adaptor.innerHTML(svg.styleSheet(mjPage));
-    document.head.appendChild(styleTag);
-    fs.writeFileSync(targetPath, dom.serialize());
-    stat.rendered++;
-    console.log(chalk.red.bold('RENDER:'), sourcePath);
-  } else {
-    fs.copyFileSync(sourcePath, targetPath);
-    stat.copied++;
-    if (!silent) {
-      console.log(chalk.yellow.bold('COPY:'), sourcePath);
-    }
-  }
-
-  function processNode(node) {
-    // Regex for $$...$$ and $...$
-    const displayRegex = /\$\$(.*?)\$\$/gs;
-    const inlineRegex = /(?<!\\)\$([^\$]+?)\$/g;
-
-    if (node.nodeType === 3) { // Text node
-      let text = node.textContent;
-      if (displayRegex.test(text) || inlineRegex.test(text)) {
+          // Create a temporary container to hold the new HTML
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = text;
+          node.replaceWith(...wrapper.childNodes);
+        }
+      } else if (node.className === 'latex-block') { // div.latex-block by org-mode
         needsUpdate = true;
 
-        // Render Display Math
-        text = text.replace(displayRegex, (_, texStr) => {
-          const output = mjPage.convert(texStr, { display: true });
-          const svg = adaptor.innerHTML(output);
-          return `<mjx-container display="true" style="display: block; text-align: center; margin: 1em 0;">${svg}</mjx-container>`;
-        });
+        let texStr = node.textContent;
 
-        // Render Inline Math
-        text = text.replace(inlineRegex, (_, texStr) => {
-          const output = mjPage.convert(texStr, { display: false });
-          return adaptor.innerHTML(output);
-        });
+        // Render Display Math
+        const output = mjPage.convert(texStr, { display: true });
+        const svg = adaptor.innerHTML(output);
+        let text = `<mjx-container display="true" style="display: block; text-align: center; margin: 1em 0;">${svg}</mjx-container>`;
 
         // Create a temporary container to hold the new HTML
         const wrapper = document.createElement('div');
         wrapper.innerHTML = text;
         node.replaceWith(...wrapper.childNodes);
+      } else if (node.nodeName !== 'SCRIPT' && node.nodeName !== 'CODE' && node.nodeName !== 'PRE') {
+        // Recursively check children, skipping code blocks
+        Array.from(node.childNodes).forEach(processNode);
       }
-    } else if (node.className === 'latex-block') { // div.latex-block by org-mode
-      needsUpdate = true;
-
-      let texStr = node.textContent;
-
-      // Render Display Math
-      const output = mjPage.convert(texStr, { display: true });
-      const svg = adaptor.innerHTML(output);
-      let text = `<mjx-container display="true" style="display: block; text-align: center; margin: 1em 0;">${svg}</mjx-container>`;
-
-      // Create a temporary container to hold the new HTML
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = text;
-      node.replaceWith(...wrapper.childNodes);
-    } else if (node.nodeName !== 'SCRIPT' && node.nodeName !== 'CODE' && node.nodeName !== 'PRE') {
-      // Recursively check children, skipping code blocks
-      Array.from(node.childNodes).forEach(processNode);
     }
   }
-}
 
-function getTargetPathFrom(sourcePath) {
-  return sourcePath.replace(publicDir, targetDir);
-}
+  function getTargetPathFrom(sourcePath) {
+    return sourcePath.replace(src, target);
+  }
 
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  function ensureDir(dir) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
   }
 }
