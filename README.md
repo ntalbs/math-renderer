@@ -1,4 +1,4 @@
-# math-renderer
+# render-math
 
 Render MathJax formula inside html fiies from `--src-dir` to SVG and
 write the result html files to `--dest-dir`.

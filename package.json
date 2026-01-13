@@ -1,5 +1,5 @@
 {
-  "name": "math-renderer",
+  "name": "render-math",
   "version": "0.1.0",
   "description": "CLI tool that render maths with MathJax",
   "keywords": [
@@ -9,13 +9,13 @@
     "tex",
     "formula"
   ],
-  "homepage": "https://github.com/ntalbs/math-renderer/#readme",
+  "homepage": "https://github.com/ntalbs/render-math/#readme",
   "bugs": {
-    "url": "https://github.com/ntalbs/math-renderer/issues"
+    "url": "https://github.com/ntalbs/render-math/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ntalbs/math-renderer.git"
+    "url": "git+https://github.com/ntalbs/render-math.git"
   },
   "license": "ISC",
   "author": "ntalbs",
